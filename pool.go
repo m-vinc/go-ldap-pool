@@ -167,7 +167,7 @@ waiting:
 
 	err := p.heartbeat(pc)
 	if err != nil {
-		// Connection is probably dead, mark it has available
+		// Connection is probably dead, mark it has unavailable
 		p.mu.Lock()
 		pc.State = PoolConnectionUnavailable
 		p.mu.Unlock()
