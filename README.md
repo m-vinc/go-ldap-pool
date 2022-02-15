@@ -9,7 +9,7 @@ Don't hesitate to open issues or pull requests, I write that for my own need so 
 
 - Customize the number of connections to keep alive.
 - Custom timeout duration while awaiting a available connection
-- Reconnect when a connection goes down or the server doesn't respond anymore.
+- Reconnect when a connection or the server goes down
 
 ## Limitation
 
