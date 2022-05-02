@@ -104,7 +104,7 @@ func (p *Pool) init() error {
 	p.mu.Lock()
 	var err error
 
-	for i := 0; i < connsCount; i++ {
+	for i := 0; i < cap(p.conns); i++ {
 		_, err = p.newConn(i)
 		if err != nil {
 			break
