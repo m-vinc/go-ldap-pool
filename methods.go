@@ -1,6 +1,8 @@
 package ldappool
 
-import "github.com/go-ldap/ldap/v3"
+import (
+	"github.com/go-ldap/ldap/v3"
+)
 
 func (p *Pool) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
 	pc, err := p.pull()
@@ -32,6 +34,22 @@ func (p *Pool) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize ui
 	}
 
 	return res, nil
+}
+
+func (p *Pool) PasswordModify(passwordModifyRequest *ldap.PasswordModifyRequest) (*ldap.PasswordModifyResult, error) {
+	pc, err := p.pull()
+	if err != nil {
+		return nil, err
+	}
+
+	res, err := pc.PasswordModify(passwordModifyRequest)
+	defer p.release(pc)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return res, err
 }
 
 func (p *Pool) Add(addRequest *ldap.AddRequest) error {
