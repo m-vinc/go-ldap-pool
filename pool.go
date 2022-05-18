@@ -104,16 +104,13 @@ func (p *Pool) init() error {
 	p.mu.Lock()
 	var err error
 
-	for i := 0; i < cap(p.conns); i++ {
-		_, err = p.newConn(i)
-		if err != nil {
-			break
-		}
-	}
-
-	if err != nil {
-		p.mu.Unlock()
-		return fmt.Errorf("Cannot open required connections (%+v)", err)
+	for i := 0; i < len(p.conns); i++ {
+		go func(i int) {
+			_, err = p.newConn(i)
+			if err != nil {
+				log.Println(err)
+			}
+		}(i)
 	}
 
 	p.mu.Unlock()
