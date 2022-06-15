@@ -1,7 +1,7 @@
 package ldappool
 
 import (
-	"github.com/go-ldap/ldap/v3"
+	"github.com/m-vinc/ldap/v3"
 )
 
 func (p *Pool) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
