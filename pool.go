@@ -29,6 +29,7 @@ type PoolConnection struct {
 }
 
 type Pool struct {
+	debug             bool
 	connectionTimeout time.Duration
 	wakeupInterval    time.Duration
 
@@ -77,7 +78,9 @@ func (p *Pool) Close() error {
 		if c == nil {
 			continue
 		}
-		log.Printf("closing connection %d", c.Index)
+		if p.debug {
+			log.Printf("closing connection %d", c.Index)
+		}
 		c.Close()
 	}
 
@@ -108,7 +111,9 @@ func (p *Pool) init() error {
 		go func(i int) {
 			_, err = p.newConn(i)
 			if err != nil {
-				log.Println(err)
+				if p.debug {
+					log.Println(err)
+				}
 			}
 		}(i)
 	}
@@ -180,6 +185,7 @@ waiting:
 }
 
 type PoolOptions struct {
+	Debug           bool
 	URL             string
 	BindCredentials *BindCredentials
 
@@ -200,6 +206,7 @@ func NewPool(ctx context.Context, po *PoolOptions) (*Pool, error) {
 	}
 
 	pool := &Pool{
+		debug:             po.Debug,
 		addr:              po.URL,
 		conns:             make([]*PoolConnection, connectionsCount),
 		bindCredentials:   po.BindCredentials,
@@ -224,6 +231,8 @@ func NewPool(ctx context.Context, po *PoolOptions) (*Pool, error) {
 
 	go pool.watcher(ctx)
 
-	log.Printf("LDAP pool initialized with %d connections. Wakeup interval set to %s, ConnectionTimeout set to %s.", connectionsCount, pool.wakeupInterval, pool.connectionTimeout)
+	if pool.debug {
+		log.Printf("LDAP pool initialized with %d connections. Wakeup interval set to %s, ConnectionTimeout set to %s.", connectionsCount, pool.wakeupInterval, pool.connectionTimeout)
+	}
 	return pool, nil
 }
