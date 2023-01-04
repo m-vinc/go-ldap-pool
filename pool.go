@@ -2,47 +2,23 @@ package ldappool
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
 )
 
-const (
-	connsCount = 10
-)
-
-type PoolConnectionState int
-
-const (
-	PoolConnectionAvailable PoolConnectionState = iota
-	PoolConnectionBusy
-	PoolConnectionUnavailable
-)
-
-type PoolConnection struct {
-	*ldap.Conn
-	State PoolConnectionState
-	Index int
-}
-
 type Pool struct {
-	debug             bool
-	connectionTimeout time.Duration
-	wakeupInterval    time.Duration
-
-	mu sync.Mutex
+	debug bool
+	// connectionTimeout time.Duration
+	// wakeupInterval    time.Duration
 
 	addr            string
 	bindCredentials *BindCredentials
 	opts            []ldap.DialOpt
 
-	conns []*PoolConnection
-
-	availableConn chan *PoolConnection
-	deadConn      chan *PoolConnection
+	conns chan *ldap.Conn
 }
 
 func (p *Pool) open() (*ldap.Conn, error) {
@@ -61,127 +37,65 @@ func (p *Pool) open() (*ldap.Conn, error) {
 	return conn, nil
 }
 
-func (p *Pool) release(pc *PoolConnection) {
-	p.mu.Lock()
-	pc.State = PoolConnectionAvailable
-	p.mu.Unlock()
+func (p *Pool) release(conn *ldap.Conn) {
+	p.conns <- conn
+}
 
-	p.availableConn <- pc
+func (p *Pool) pull(ctx context.Context) (*ldap.Conn, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
+	defer cancel()
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case conn := <-p.conns:
+		if conn.IsClosing() {
+			log.Println("connection closed, trying to re-open one connection")
+			for {
+				c, err := p.open()
+				if err != nil {
+					time.Sleep(5 * time.Second)
+					continue
+				}
+				return c, nil
+			}
+		}
+		return conn, nil
+	}
 }
 
 func (p *Pool) Close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	// errs := []error{}
-	for _, c := range p.conns {
-		if c == nil {
-			continue
-		}
+	l := len(p.conns)
+	for i := 0; i < l; i++ {
+		c := <-p.conns
 		if p.debug {
-			log.Printf("closing connection %d", c.Index)
+			log.Printf("closing %v", c)
 		}
 		c.Close()
 	}
-
 	return nil
-}
-
-func (p *Pool) newConn(i int) (*PoolConnection, error) {
-	conn, err := p.open()
-	if err != nil {
-		return nil, err
-	}
-
-	pc := &PoolConnection{
-		Conn:  conn,
-		Index: i,
-	}
-	p.conns[i] = pc
-	p.availableConn <- pc
-
-	return pc, nil
 }
 
 func (p *Pool) init() error {
-	p.mu.Lock()
-	var err error
-
-	for i := 0; i < len(p.conns); i++ {
-		go func(i int) {
-			_, err = p.newConn(i)
-			if err != nil {
-				if p.debug {
-					log.Println(err)
-				}
-			}
-		}(i)
-	}
-
-	p.mu.Unlock()
-	return nil
-}
-
-func (p *Pool) heartbeat(c *PoolConnection) error {
-	closing := c.Conn.IsClosing()
-	if closing {
-		return fmt.Errorf("connection is closed or being closed")
-	}
-
-	_, err := c.Conn.Search(&ldap.SearchRequest{BaseDN: "", Scope: ldap.ScopeBaseObject, Filter: "(&)", Attributes: []string{"1.1"}})
-	if err != nil {
-		return fmt.Errorf("cannot heartbeat")
-	}
-
-	return nil
-}
-
-func (p *Pool) watcher(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case pc := <-p.deadConn:
-			go func() {
-				for {
-					p.mu.Lock()
-					if pc.State != PoolConnectionUnavailable {
-						return
-					}
-
-					p.newConn(pc.Index)
-					p.mu.Unlock()
-					time.Sleep(p.wakeupInterval)
-				}
-			}()
+	errs := []error{}
+	for i := 0; i < cap(p.conns); i++ {
+		c, err := p.open()
+		if err != nil {
+			errs = append(errs, err)
+			continue
 		}
-	}
-}
 
-func (p *Pool) pull() (*PoolConnection, error) {
-	var pc *PoolConnection
-waiting:
-	select {
-	case pc = <-p.availableConn:
-	case <-time.After(p.connectionTimeout):
-		return nil, fmt.Errorf("timeout while pulling connection")
+		p.conns <- c
 	}
 
-	err := p.heartbeat(pc)
-	if err != nil {
-		// Connection is probably dead, mark it has unavailable
-		p.mu.Lock()
-		pc.State = PoolConnectionUnavailable
-		p.mu.Unlock()
-		p.deadConn <- pc
-		goto waiting
+	if len(errs) == cap(p.conns) {
+		if p.debug {
+			log.Printf("%+v", errs)
+		}
+		return errors.New("unable to initialize at most one connection")
 	}
 
-	p.mu.Lock()
-	pc.State = PoolConnectionBusy
-	p.mu.Unlock()
-
-	return pc, nil
+	return nil
 }
 
 type PoolOptions struct {
@@ -189,9 +103,7 @@ type PoolOptions struct {
 	URL             string
 	BindCredentials *BindCredentials
 
-	ConnectionsCount  int
-	ConnectionTimeout time.Duration
-	WakeupInterval    time.Duration
+	ConnectionsCount int
 }
 
 type BindCredentials struct {
@@ -199,29 +111,17 @@ type BindCredentials struct {
 	Password string
 }
 
-func NewPool(ctx context.Context, po *PoolOptions) (*Pool, error) {
-	connectionsCount := connsCount
+func NewPool(po *PoolOptions) (*Pool, error) {
+	connectionsCount := 5
 	if po.ConnectionsCount != 0 {
 		connectionsCount = po.ConnectionsCount
 	}
 
 	pool := &Pool{
-		debug:             po.Debug,
-		addr:              po.URL,
-		conns:             make([]*PoolConnection, connectionsCount),
-		bindCredentials:   po.BindCredentials,
-		availableConn:     make(chan *PoolConnection, connectionsCount),
-		deadConn:          make(chan *PoolConnection),
-		connectionTimeout: po.ConnectionTimeout,
-		wakeupInterval:    po.WakeupInterval,
-	}
-
-	if pool.connectionTimeout == 0 {
-		pool.connectionTimeout = 10 * time.Second
-	}
-
-	if pool.wakeupInterval == 0 {
-		pool.wakeupInterval = 5 * time.Second
+		debug:           po.Debug,
+		addr:            po.URL,
+		conns:           make(chan *ldap.Conn, 5),
+		bindCredentials: po.BindCredentials,
 	}
 
 	err := pool.init()
@@ -229,10 +129,9 @@ func NewPool(ctx context.Context, po *PoolOptions) (*Pool, error) {
 		return nil, err
 	}
 
-	go pool.watcher(ctx)
-
 	if pool.debug {
-		log.Printf("LDAP pool initialized with %d connections. Wakeup interval set to %s, ConnectionTimeout set to %s.", connectionsCount, pool.wakeupInterval, pool.connectionTimeout)
+		log.Printf("LDAP pool initialized with %d connections. Wakeup interval set to %s, ConnectionTimeout set to %s.", connectionsCount)
 	}
+
 	return pool, nil
 }

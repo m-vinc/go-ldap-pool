@@ -1,11 +1,17 @@
 package ldappool
 
 import (
+	"context"
+	"time"
+
 	"github.com/go-ldap/ldap/v3"
 )
 
 func (p *Pool) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, error) {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -21,7 +27,10 @@ func (p *Pool) Search(searchRequest *ldap.SearchRequest) (*ldap.SearchResult, er
 }
 
 func (p *Pool) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize uint32) (*ldap.SearchResult, error) {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -37,7 +46,10 @@ func (p *Pool) SearchWithPaging(searchRequest *ldap.SearchRequest, pagingSize ui
 }
 
 func (p *Pool) PasswordModify(passwordModifyRequest *ldap.PasswordModifyRequest) (*ldap.PasswordModifyResult, error) {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +65,10 @@ func (p *Pool) PasswordModify(passwordModifyRequest *ldap.PasswordModifyRequest)
 }
 
 func (p *Pool) Add(addRequest *ldap.AddRequest) error {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return err
 	}
@@ -69,7 +84,10 @@ func (p *Pool) Add(addRequest *ldap.AddRequest) error {
 }
 
 func (p *Pool) Modify(modifyRequest *ldap.ModifyRequest) error {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return err
 	}
@@ -85,7 +103,10 @@ func (p *Pool) Modify(modifyRequest *ldap.ModifyRequest) error {
 }
 
 func (p *Pool) ModifyDN(m *ldap.ModifyDNRequest) error {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return err
 	}
@@ -101,7 +122,10 @@ func (p *Pool) ModifyDN(m *ldap.ModifyDNRequest) error {
 }
 
 func (p *Pool) ModifyWithResult(modifyRequest *ldap.ModifyRequest) (*ldap.ModifyResult, error) {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +141,10 @@ func (p *Pool) ModifyWithResult(modifyRequest *ldap.ModifyRequest) (*ldap.Modify
 }
 
 func (p *Pool) Del(delRequest *ldap.DelRequest) error {
-	pc, err := p.pull()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+
+	pc, err := p.pull(ctx)
 	if err != nil {
 		return err
 	}
