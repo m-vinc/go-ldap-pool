@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/go-ldap/ldap/v3 v3.4.2
 	github.com/m-vinc/go-ldap-pool v1.0.0
-	github.com/m-vinc/ldap/v3 v3.4.5
+	github.com/m-vinc/ldap/v3 v3.4.7
 )
 
 require (
