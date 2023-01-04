@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/go-ldap/ldap/v3"
+	"github.com/m-vinc/ldap/v3"
 )
 
 type Pool struct {
