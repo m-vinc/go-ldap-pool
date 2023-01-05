@@ -21,14 +21,11 @@ Don't hesitate to open issues or pull requests, I write that for my own need so 
 ## How to use it ?
 
 ```go
-p, err := ldappool.NewPool(context.Background(), &ldappool.PoolOptions{
+p, err := ldappool.NewPool(&ldappool.PoolOptions{
     URL: "ldaps://ldap.example.fr",
     // Manage 10 connections
     ConnectionsCount: 10,
-    // Every request is going to wait a available connection 5 seconds and return an error if there is no connections available
-    ConnectionTimeout: time.Second * 5,
-    // If a connection is marked as unavailable after a heartbeat, we try to connect every 5 seconds
-    WakeupInterval: time.Second * 5,
+    // Your bind credentials if you want to bind as non-anonymous user
     BindCredentials: &ldappool.BindCredentials{
         Username: "cn=admin,dc=example,dc=fr",
         Password: "toto",
